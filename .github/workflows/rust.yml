@@ -25,7 +25,7 @@ env:
   CXX: clang++
   NM: llvm-nm
   RANLIB: llvm-ranlib
-  RUSTFLAGS: '-Cembed-bitcode -C opt-level=3 -Ccodegen-units=1 -Clinker=clang -C link-arg=-flto -Clink-arg=-fuse-ld=/usr/bin/ld.lld'
+  RUSTFLAGS: '-Cembed-bitcode -Clinker=clang -Clink-arg=-fuse-ld=/usr/bin/ld.lld'
 
 jobs:
   build:
