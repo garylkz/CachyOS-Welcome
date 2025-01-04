@@ -17,6 +17,7 @@ use data_types::*;
 use utils::*;
 
 use std::collections::HashMap;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::{fs, str};
@@ -30,8 +31,8 @@ use gtk::{gdk, glib, Builder, HeaderBar, Window};
 use i18n_embed::DesktopLanguageRequester;
 use once_cell::sync::Lazy;
 use serde_json::json;
-use subprocess::Exec;
-use tracing::{debug, error};
+use subprocess::{Exec, Redirection};
+use tracing::{debug, error, info};
 use unic_langid::LanguageIdentifier;
 
 const RESPREFIX: &str = "/org/cachyos/hello";
@@ -160,12 +161,33 @@ fn quick_message(message: String) {
         let checks = [connectivity_check, edition_compat_check, outdated_version_check];
         if !checks.iter().all(|x| x(message.clone())) {
             // if any check failed, return
+            info!("Some ISO check failed!");
             install_btn.set_sensitive(true);
             return;
         }
 
-        let cmd = "/usr/local/bin/calamares-online.sh".to_owned();
-        Exec::cmd(cmd).join().unwrap();
+        // Spawning child process
+        info!("ISO checks passed! Starting Installer..");
+        let mut child = Exec::cmd("/usr/local/bin/calamares-online.sh")
+            .stdout(Redirection::Pipe)
+            .stderr(Redirection::Merge)
+            .popen()
+            .expect("Failed to spawn installer");
+
+        let child_out = child.stdout.take().unwrap();
+        let child_read = BufReader::new(child_out);
+
+        // Read the output line by line until EOF
+        for line_result in child_read.lines() {
+            match line_result {
+                Ok(line) => info!("{line}"),
+                Err(e) => error!("Error reading output: {e}"),
+            }
+        }
+
+        let status = child.wait().expect("Failed to waiting for child");
+        info!("Installer finished with status: {:?}", status);
+
         install_btn.set_sensitive(true);
     });
 }
