@@ -17,6 +17,7 @@ use once_cell::sync::Lazy;
 use phf::phf_ordered_map;
 use subprocess::{Exec, Redirection};
 use tracing::debug;
+use which::which;
 
 #[macro_export]
 macro_rules! create_gtk_button {
@@ -1071,17 +1072,14 @@ fn on_appbtn_clicked(button: &gtk::Button) {
         ""
     };
 
-    // Check if executable exists.
-    let exit_status = Exec::cmd("which").arg(binname).join().unwrap();
-    if !exit_status.success() {
+    // Get executable path, overwise return if it doesn't exist.
+    let exec_path = which(binname);
+    if exec_path.is_err() {
         return;
     }
 
     // Get executable path.
-    let mut exe_path =
-        Exec::cmd("which").arg(binname).stdout(Redirection::Pipe).capture().unwrap().stdout_str();
-    exe_path.pop();
-    let bash_cmd = format!("{} &disown", &exe_path);
+    let bash_cmd = format!("{} &disown", exec_path.unwrap().to_str().unwrap());
 
     // Create context channel.
     let (tx, rx) = glib::MainContext::channel(glib::Priority::default());

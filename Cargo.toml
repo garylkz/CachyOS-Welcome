@@ -28,6 +28,7 @@ chwd = { git = "https://github.com/CachyOS/chwd", rev = "3b288ba0d86b1d078057eb7
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
+which = { version = "7.0", features = ["tracing"] }
 
 [build-dependencies]
 anyhow = "1"
