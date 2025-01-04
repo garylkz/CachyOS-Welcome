@@ -21,38 +21,67 @@ usage() {
     echo "Usage: ${0##*/} [cmd]"
     echo '    -s [shell]         Change shell to [shell]'
     echo '    -h                 This help'
-    exit 1
+    exit "$1"
 }
 
 opts='s:h'
 
 while getopts "${opts}" arg; do
     case "${arg}" in
-        s) LAUNCHER_CMD="$OPTARG" ;;
-        h|?) usage 0 ;;
-        *) echo "invalid argument '${arg}'"; usage 1 ;;
+    s) LAUNCHER_CMD="$OPTARG" ;;
+    h | ?) usage 0 ;;
+    *)
+        echo "invalid argument '${arg}'"
+        usage 1
+        ;;
     esac
 done
 
-shift $(($OPTIND - 1))
+# OPTIND is a global variable
+shift $((OPTIND - 1))
 
 file="$(mktemp)"
-echo "$1" > "$file"
+echo "$1" >"$file"
 cmd="${LAUNCHER_CMD} \"$file\""
-echo $cmd
+echo "$cmd"
 
-#declare -a terminals=(x-terminal-emulator mate-terminal gnome-terminal terminator xfce4-terminal urxvt rxvt termit Eterm aterm uxterm xterm roxterm termite lxterminal terminology st qterminal lilyterm tilix terminix konsole kitty guake tilda alacritty)
 terminal=""
-declare -A terminals=( ["alacritty"]="alacritty -e $cmd || LIBGL_ALWAYS_SOFTWARE=1 alacritty -e $cmd" ["rio"]="rio -e $cmd" ["ghostty"]="ghostty -e $cmd" ["kitty"]="kitty $cmd" ["konsole"]="konsole -e $cmd" ["gnome-console"]="kgx --wait -e $cmd" ["gnome-terminal"]="gnome-terminal --wait -- $cmd" ["xfce4-terminal"]="xfce4-terminal --disable-server --command '$cmd'" ["lxterminal"]="lxterminal -e $cmd" ["xterm"]="xterm -e $cmd" ["st"]="st $cmd" ["foot"]="foot $cmd")
-declare -a term_order=( "alacritty" "rio" "ghostty" "kitty" "konsole" "gnome-console" "gnome-terminal" "xfce4-terminal" "lxterminal" "xterm" "st" "foot")
+declare -A terminals=(
+    ["alacritty"]="alacritty -e $cmd || LIBGL_ALWAYS_SOFTWARE=1 alacritty -e $cmd"
+    ["foot"]="foot $cmd"
+    ["ghostty"]="ghostty -e $cmd"
+    ["gnome-console"]="kgx --wait -e $cmd"
+    ["gnome-terminal"]="gnome-terminal --wait -- $cmd"
+    ["kitty"]="kitty $cmd"
+    ["konsole"]="konsole -e $cmd"
+    ["lxterminal"]="lxterminal -e $cmd"
+    ["rio"]="rio -e $cmd"
+    ["st"]="st $cmd"
+    ["xfce4-terminal"]="xfce4-terminal --disable-server --command '$cmd'"
+    ["xterm"]="xterm -e $cmd"
+)
+declare -a term_order=(
+    "alacritty"
+    "rio"
+    "ghostty"
+    "kitty"
+    "konsole"
+    "gnome-console"
+    "gnome-terminal"
+    "xfce4-terminal"
+    "lxterminal"
+    "xterm"
+    "st"
+    "foot"
+)
 
-if [ -z "$terminal" ] || ! command -v "$terminal" &> /dev/null; then
-for entry in ${term_order[@]}; do
-    if command -v "$entry" > /dev/null 2>&1; then
-        terminal="$entry"
-        break;
-    fi
-done
+if [ -z "$terminal" ] || ! command -v "$terminal" &>/dev/null; then
+    for entry in "${term_order[@]}"; do
+        if command -v "$entry" >/dev/null 2>&1; then
+            terminal="$entry"
+            break
+        fi
+    done
 fi
 
 if [ -z "$terminal" ]; then
@@ -60,5 +89,8 @@ if [ -z "$terminal" ]; then
     exit 1
 fi
 
-eval "${terminals[${terminal}]}" || { rm "$file"; exit 2; }
+eval "${terminals[${terminal}]}" || {
+    rm "$file"
+    exit 2
+}
 rm "$file"
