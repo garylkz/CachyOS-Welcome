@@ -8,6 +8,7 @@ mod data_types;
 mod embed_data;
 mod gresource;
 mod localization;
+mod logger;
 mod pages;
 mod utils;
 
@@ -30,6 +31,7 @@ use i18n_embed::DesktopLanguageRequester;
 use once_cell::sync::Lazy;
 use serde_json::json;
 use subprocess::Exec;
+use tracing::{debug, error};
 use unic_langid::LanguageIdentifier;
 
 const RESPREFIX: &str = "/org/cachyos/hello";
@@ -217,6 +219,9 @@ fn get_saved_json() -> serde_json::Value {
 }
 
 fn main() {
+    // Setup logger.
+    let _guard = logger::setup_logger();
+
     // Setup localization.
     let saved_locale = get_saved_locale().unwrap();
     let requested_languages = if !saved_locale.is_empty() {
@@ -228,7 +233,7 @@ fn main() {
 
     let localizer = crate::localization::localizer();
     if let Err(error) = localizer.select(&requested_languages) {
-        eprintln!("Error while loading languages for library_fluent {}", error);
+        error!("Error while loading languages for library_fluent {error}");
     }
 
     // Register UI.
@@ -459,18 +464,14 @@ pub fn get_best_locale(
 /// Sets locale of ui and pages.
 fn set_locale(use_locale: &str) {
     if PROFILE == "Devel" {
-        println!(
-            "┌{0:─^40}┐\n│{1: ^40}│\n└{0:─^40}┘",
-            "",
-            format!("Locale changed to {use_locale}")
-        );
+        debug!("┌{0:─^40}┐\n│{1: ^40}│\n└{0:─^40}┘", "", format!("Locale changed to {use_locale}"));
     }
 
     let localizer = crate::localization::localizer();
     let req_locale: LanguageIdentifier = use_locale.parse().unwrap();
 
     if let Err(error) = localizer.select(&[req_locale]) {
-        eprintln!("Error while loading languages for library_fluent {}", error);
+        error!("Error while loading languages for library_fluent {error}");
     }
 
     G_SAVE_JSON.lock().unwrap()["locale"] = json!(use_locale);
@@ -537,7 +538,7 @@ fn set_locale(use_locale: &str) {
         let stack: &gtk::Stack = &builder_ref.object("stack").unwrap();
         let child = stack.child_by_name(&format!("{}page", &page_file_name));
         if child.is_none() {
-            eprintln!("child not found");
+            debug!("child not found");
             continue;
         }
         let first_child = &child.unwrap().downcast::<gtk::Container>().unwrap().children();

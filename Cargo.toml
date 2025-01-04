@@ -25,6 +25,9 @@ reqwest = { version = "0.12", features = ["blocking", "json"] }
 unic-langid = "0.9"
 phf = { version = "0.11", features = ["macros"], default-features = false }
 chwd = { git = "https://github.com/CachyOS/chwd", rev = "3b288ba0d86b1d078057eb7f3d50b562959fd17a", version = "1.11.0" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
 
 [build-dependencies]
 anyhow = "1"

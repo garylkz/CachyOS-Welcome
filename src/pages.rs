@@ -9,14 +9,14 @@ use std::path::Path;
 use std::str;
 use std::sync::Mutex;
 
+use gtk::prelude::*;
+
 use glib::translate::FromGlib;
 use gtk::{glib, Builder};
 use once_cell::sync::Lazy;
 use phf::phf_ordered_map;
-
-use gtk::prelude::*;
-
 use subprocess::{Exec, Redirection};
+use tracing::{debug, info};
 
 #[macro_export]
 macro_rules! create_gtk_button {
@@ -1094,7 +1094,7 @@ fn on_appbtn_clicked(button: &gtk::Button) {
     });
 
     rx.attach(None, move |text| {
-        println!("{text}");
+        debug!("{text}");
         glib::ControlFlow::Continue
     });
 }
