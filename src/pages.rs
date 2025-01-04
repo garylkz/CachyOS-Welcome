@@ -1078,15 +1078,15 @@ fn on_appbtn_clicked(button: &gtk::Button) {
         return;
     }
 
-    // Get executable path.
-    let bash_cmd = format!("{} &disown", exec_path.unwrap().to_str().unwrap());
-
     // Create context channel.
     let (tx, rx) = glib::MainContext::channel(glib::Priority::default());
 
     // Spawn child process in separate thread.
     std::thread::spawn(move || {
-        let exit_status = Exec::shell(bash_cmd).join().unwrap();
+        // Get executable path.
+        let exec_path = exec_path.unwrap().to_str().unwrap().to_owned();
+        let exit_status = Exec::cmd(exec_path).detached().join().expect("Failed to spawn process");
+
         tx.send(format!("Exit status successfully? = {:?}", exit_status.success()))
             .expect("Couldn't send data to channel");
     });
