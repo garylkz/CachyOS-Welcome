@@ -16,7 +16,7 @@ use gtk::{glib, Builder};
 use once_cell::sync::Lazy;
 use phf::phf_ordered_map;
 use subprocess::{Exec, Redirection};
-use tracing::{debug, info};
+use tracing::debug;
 
 #[macro_export]
 macro_rules! create_gtk_button {

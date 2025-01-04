@@ -98,7 +98,7 @@ fn outdated_version_check(message: String) -> bool {
             message.clone(),
         );
     }
-    return true;
+    true
 }
 
 fn edition_compat_check(message: String) -> bool {
@@ -127,7 +127,7 @@ fn edition_compat_check(message: String) -> bool {
             return true;
         }
     }
-    return true;
+    true
 }
 
 fn connectivity_check(message: String) -> bool {
@@ -146,7 +146,7 @@ fn connectivity_check(message: String) -> bool {
         );
         return false;
     }
-    return true;
+    true
 }
 
 fn quick_message(message: String) {
@@ -158,7 +158,7 @@ fn quick_message(message: String) {
         install_btn.set_sensitive(false);
 
         let checks = [connectivity_check, edition_compat_check, outdated_version_check];
-        if !checks.iter().map(|x| x(message.clone())).all(|x| x) {
+        if !checks.iter().all(|x| x(message.clone())) {
             // if any check failed, return
             install_btn.set_sensitive(true);
             return;
