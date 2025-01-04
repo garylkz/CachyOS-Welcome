@@ -7,6 +7,7 @@ mod config;
 mod data_types;
 mod embed_data;
 mod gresource;
+mod installer;
 mod localization;
 mod logger;
 mod pages;
@@ -17,7 +18,6 @@ use data_types::*;
 use utils::*;
 
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::{fs, str};
@@ -31,8 +31,7 @@ use gtk::{gdk, glib, Builder, HeaderBar, Window};
 use i18n_embed::DesktopLanguageRequester;
 use once_cell::sync::Lazy;
 use serde_json::json;
-use subprocess::{Exec, Redirection};
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 use unic_langid::LanguageIdentifier;
 
 const RESPREFIX: &str = "/org/cachyos/hello";
@@ -42,155 +41,6 @@ static G_SAVE_JSON: Lazy<Mutex<serde_json::Value>> = Lazy::new(|| {
     Mutex::new(saved_json)
 });
 static mut G_HELLO_WINDOW: Option<Arc<HelloWindow>> = None;
-
-#[derive(serde::Deserialize)]
-struct Versions {
-    #[serde(rename = "desktopISOVersion")]
-    desktop_iso_version: String,
-    #[serde(rename = "handheldISOVersion")]
-    handheld_iso_version: String,
-}
-
-fn outdated_version_check(message: String) -> bool {
-    let edition_tag: String =
-        fs::read_to_string("/etc/edition-tag").unwrap_or("desktop".into()).trim().into();
-    let version_tag: String =
-        fs::read_to_string("/etc/version-tag").unwrap_or("testing".into()).trim().into();
-
-    let window_ref = unsafe { &G_HELLO_WINDOW.as_ref().unwrap().window };
-
-    if version_tag.contains("testing") {
-        utils::show_simple_dialog(
-            window_ref,
-            gtk::MessageType::Warning,
-            &fl!("testing-iso-warning"),
-            message.clone(),
-        );
-        return true;
-    }
-
-    let response = reqwest::blocking::get("https://cachyos.org/versions.json");
-
-    if response.is_err() {
-        utils::show_simple_dialog(
-            window_ref,
-            gtk::MessageType::Warning,
-            &fl!("offline-error"),
-            message.clone(),
-        );
-        return false;
-    }
-
-    let versions = response.unwrap().json::<Versions>().unwrap();
-
-    let latest_version = if edition_tag.contains("desktop") {
-        versions.desktop_iso_version
-    } else {
-        versions.handheld_iso_version
-    }
-    .trim()
-    .to_owned();
-
-    if version_tag != latest_version {
-        utils::show_simple_dialog(
-            window_ref,
-            gtk::MessageType::Warning,
-            &fl!("outdated-version-warning"),
-            message.clone(),
-        );
-    }
-    true
-}
-
-fn edition_compat_check(message: String) -> bool {
-    let edition_tag = fs::read_to_string("/etc/edition-tag").unwrap_or("desktop".to_string());
-
-    if edition_tag == "handheld" {
-        let profiles_path =
-            format!("{}/handhelds/profiles.toml", chwd::consts::CHWD_PCI_CONFIG_DIR);
-
-        let handheld_profiles =
-            chwd::profile::parse_profiles(&profiles_path).expect("Failed to parse profiles");
-        let handheld_profile_names: Vec<_> =
-            handheld_profiles.iter().map(|profile| &profile.name).collect();
-
-        let available_profiles = chwd::profile::get_available_profiles(false);
-
-        if available_profiles.iter().any(|profile| handheld_profile_names.contains(&&profile.name))
-        {
-            let window_ref = unsafe { &G_HELLO_WINDOW.as_ref().unwrap().window };
-            utils::show_simple_dialog(
-                window_ref,
-                gtk::MessageType::Warning,
-                &fl!("unsupported-hw-warning"),
-                message.clone(),
-            );
-            return true;
-        }
-    }
-    true
-}
-
-fn connectivity_check(message: String) -> bool {
-    let status = match reqwest::blocking::get("https://cachyos.org") {
-        Ok(resp) => resp.status().is_success() || resp.status().is_server_error(),
-        _ => false,
-    };
-
-    if !status {
-        let window_ref = unsafe { &G_HELLO_WINDOW.as_ref().unwrap().window };
-        utils::show_simple_dialog(
-            window_ref,
-            gtk::MessageType::Error,
-            &fl!("offline-error"),
-            message,
-        );
-        return false;
-    }
-    true
-}
-
-fn quick_message(message: String) {
-    // Spawn child process in separate thread.
-    std::thread::spawn(move || {
-        let builder = unsafe { &G_HELLO_WINDOW.as_ref().unwrap().builder };
-
-        let install_btn: gtk::Button = builder.object("install").unwrap();
-        install_btn.set_sensitive(false);
-
-        let checks = [connectivity_check, edition_compat_check, outdated_version_check];
-        if !checks.iter().all(|x| x(message.clone())) {
-            // if any check failed, return
-            info!("Some ISO check failed!");
-            install_btn.set_sensitive(true);
-            return;
-        }
-
-        // Spawning child process
-        info!("ISO checks passed! Starting Installer..");
-        let mut child = Exec::cmd("/usr/local/bin/calamares-online.sh")
-            .stdout(Redirection::Pipe)
-            .stderr(Redirection::Merge)
-            .popen()
-            .expect("Failed to spawn installer");
-
-        let child_out = child.stdout.take().unwrap();
-        let child_read = BufReader::new(child_out);
-
-        // Read the output line by line until EOF
-        for line_result in child_read.lines() {
-            match line_result {
-                Ok(line) => info!("{line}"),
-                Err(e) => error!("Error reading output: {e}"),
-            }
-        }
-
-        let status = child.wait().expect("Failed to waiting for child");
-        info!("Installer finished with status: {:?}", status);
-
-        install_btn.set_sensitive(true);
-    });
-}
 
 fn show_about_dialog() {
     let main_window: &Window = unsafe { G_HELLO_WINDOW.as_ref().unwrap().window.as_ref() };
@@ -422,9 +272,7 @@ fn build_ui(application: &gtk::Application) {
     autostart_switch.set_active(autostart);
 
     // Live systems
-    if (Path::new(&preferences["live_path"].as_str().unwrap()).exists())
-        && (check_regular_file(preferences["installer_path"].as_str().unwrap()))
-    {
+    if installer::is_iso(&preferences) {
         let installlabel: gtk::Label = builder.object("installlabel").unwrap();
         installlabel.set_visible(true);
 
@@ -610,7 +458,7 @@ fn on_action_clicked(param: &[glib::Value]) -> Option<glib::Value> {
     let widget = param[0].get::<gtk::Widget>().unwrap();
     match widget.widget_name().as_str() {
         "install" => {
-            quick_message(fl!("calamares-install-type"));
+            installer::launch_installer(fl!("calamares-install-type"));
             None
         },
         "autostart" => {
